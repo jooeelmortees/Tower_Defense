@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Defense - Nivel 1</title>
+    <style>
+         /* Reset CSS básico */
+         * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Estilo del fondo del juego */
+        body {
+            background-color: #2c3e50;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Contenedor principal del juego */
+        #gameContainer {
+            width: 1000px;
+            margin: 150px auto;
+            background-color: #34495e;
+            padding: 45px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Tablero de juego */
+        #gameBoard {
+            width: 760px;
+            height: 440px;
+            margin-left: 80px;
+            border-radius: 10px;
+            position: relative;
+            margin-bottom: 20px;
+            background-image: url('/img/Mapa/1 Tiles/FieldsTile_38.png');
+            background-size: 40px 40px;
+        }
+
+        /* Segmentos del camino */
+        .path-segment {
+            position: absolute;
+            background-image: url('/img/Mapa/1 Tiles/FieldsTile_01.png');
+            width: 40px;
+            height: 40px;
+            background-size: cover;
+        }
+
+        /* Slots para colocar torres */
+        .tower-slot {
+            width: 38px;
+            height: 38px;
+            position: absolute;
+            cursor: pointer;
+            background-image: url('/img/Mapa/2 Objects/PlaceForTower1.png');
+            background-size: cover;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .tower-slot:hover {
+            opacity: 1;
+        }
+
+        .tower-slot.invalid {
+            display: none;
+        }
+
+        /* Estilo de las torres */
+        .tower {
+            width: 36px;
+            height: 36px;
+            position: absolute;
+            background-size: cover;
+        }
+
+        /* Estilo de los enemigos */
+        .enemy {
+            width: 32px;
+            height: 32px;
+            position: absolute;
+            background-repeat: no-repeat;
+            transition: left 0.1s linear, top 0.1s linear;
+        }
+
+        /* Barra de vida de los enemigos */
+        .health-bar-container {
+            position: absolute;
+            top: -15px;
+            width: 30px;
+            height: 4px;
+            background-color: #e74c3c;
+            border-radius: 2px;
+        }
+
+        .health-bar {
+            height: 100%;
+            background-color: #2ecc71;
+            border-radius: 2px;
+            transition: width 0.2s ease-in-out;
+        }
+
+        /* Estilo de los proyectiles */
+        .projectile {
+            width: 10px;
+            height: 10px;
+            background-color: #f1c40f;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.1s linear;
+        }
+
+        /* Panel de controles */
+        #controls {
+            width: 900px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background-color: #2c3e50;
+            border-radius: 5px;
+            color: white;
+        }
+
+        /* Botones de torres */
+        .tower-button {
+            padding: 10px;
+            background-color: #3498db;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+
+        .tower-button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Panel de estadísticas */
+        #stats {
+            display: flex;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="gameBoard"></div>
+        <div id="controls">
+            <div id="towers">
+                <button class="tower-button" data-type="basic">Torre Básica ($100)</button>
+                <button class="tower-button" data-type="rapid">Torre Rápida ($150)</button>
+                <button class="tower-button" data-type="sniper">Torre Francotirador ($200)</button>
+            </div>
+            <div id="stats">
+                <div>Oro: <span id="gold">300</span></div>
+                <div>Vidas: <span id="lives">20</span></div>
+                <div>Oleada: <span id="wave">1</span>/5</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// ==================== CONFIGURACIÓN GLOBAL ====================
+const gameState = {
+    gold: 300,         
+    lives: 10,         
+    wave: 1,           
+    enemies: [],       
+    towers: [],        
+    projectiles: [],   
+    selectedTowerType: null,  
+    waveInProgress: false     
+};
+
+// ==================== SISTEMA DE CAMINO ====================
+const pathSegments = [
+    {x: 0, y: 5}, {x: 1, y: 5}, {x: 2, y: 5}, {x: 3, y: 5}, {x: 4, y: 5},
+    {x: 5, y: 5}, {x: 5, y: 4}, {x: 5, y: 3}, {x: 5, y: 2}, {x: 6, y: 2},
+    {x: 7, y: 2}, {x: 8, y: 2}, {x: 9, y: 2}, {x: 10, y: 2}, {x: 10, y: 3},
+    {x: 10, y: 4}, {x: 10, y: 5}, {x: 10, y: 6}, {x: 10, y: 7}, {x: 11, y: 7},
+    {x: 12, y: 7}, {x: 13, y: 7}, {x: 14, y: 7}, {x: 15, y: 7}, {x: 16, y: 7},
+    {x: 17, y: 7}, {x: 18, y: 7}
+];
+
+const pathPoints = pathSegments.map(segment => ({
+    x: segment.x * 40 + 20,
+    y: segment.y * 40 + 20
+}));
+
+function createPath() {
+    const gameBoard = document.getElementById('gameBoard');
+    pathSegments.forEach(segment => {
+        const pathElement = document.createElement('div');
+        pathElement.className = 'path-segment';
+        pathElement.style.left = (segment.x * 40) + 'px';
+        pathElement.style.top = (segment.y * 40) + 'px';
+        gameBoard.appendChild(pathElement);
+    });
+}
+
+function isOnPath(x, y) {
+    return pathSegments.some(segment => 
+        segment.x === Math.floor(x / 40) && 
+        segment.y === Math.floor(y / 40)
+    );
+}
+
+// ==================== SISTEMA DE ENEMIGOS ====================
+const ENEMY_SPRITES = {
+    right: {
+        walking: '/img/Enemigos/2/R_Walk.png',
+        death: '/img/Enemigos/2/R_Death.png'
+    },
+    left: {
+        walking: '/img/Enemigos/2/S_Walk.png',
+        death: '/img/Enemigos/2/S_Death.png'
+    },
+    up: {
+        walking: '/img/Enemigos/2/U_Walk.png',
+        death: '/img/Enemigos/2/U_Death.png'
+    },
+    down: {
+        walking: '/img/Enemigos/2/D_Walk.png',
+        death: '/img/Enemigos/2/D_Death.png'
+    }
+};
+
+function createEnemy() {
+    const baseHealth = 60;
+    const healthMultiplier = 1 + (gameState.wave - 1) * 0.3;
+    const maxHealth = Math.floor(baseHealth * healthMultiplier);
+
+    const enemy = {
+        x: pathPoints[0].x - 20,
+        y: pathPoints[0].y - 20,
+        health: maxHealth,
+        maxHealth: maxHealth,
+        pathIndex: 0,
+        element: document.createElement('div'),
+        healthBarContainer: document.createElement('div'),
+        healthBar: document.createElement('div'),
+        direction: 'right',
+        currentFrame: 0,
+        lastFrameUpdate: Date.now(),
+        spriteIndex: 0,
+        isDying: false
+    };
+
+    enemy.element.className = 'enemy';
+    enemy.element.style.backgroundImage = `url(${ENEMY_SPRITES.right.walking})`;
+    
+    enemy.healthBarContainer.className = 'health-bar-container';
+    enemy.healthBar.className = 'health-bar';
+    enemy.healthBar.style.width = '100%';
+    
+    enemy.healthBarContainer.appendChild(enemy.healthBar);
+    enemy.element.appendChild(enemy.healthBarContainer);
+    
+    document.getElementById('gameBoard').appendChild(enemy.element);
+    gameState.enemies.push(enemy);
+}
+
+function updateEnemyAnimation(enemy, dx, dy) {
+    const currentTime = Date.now();
+    
+    let newDirection;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        newDirection = dx > 0 ? 'right' : 'left';
+    } else {
+        newDirection = dy > 0 ? 'down' : 'up';
+    }
+
+    if (newDirection !== enemy.direction) {
+        enemy.direction = newDirection;
+        enemy.element.style.backgroundImage = `url(${ENEMY_SPRITES[enemy.direction].walking})`;
+    }
+
+    if (currentTime - enemy.lastFrameUpdate > 100) {
+        enemy.spriteIndex = (enemy.spriteIndex + 1) % 6;
+        enemy.element.style.backgroundPosition = `-${enemy.spriteIndex * 48}px 0px`;
+        enemy.lastFrameUpdate = currentTime;
+    }
+}
+
+function updateEnemies() {
+    for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+        const enemy = gameState.enemies[i];
+        
+        if (enemy.isDying) {
+            const currentTime = Date.now();
+            if (currentTime - enemy.lastFrameUpdate > 100) {
+                enemy.spriteIndex++;
+                if (enemy.spriteIndex >= 6) {
+                    enemy.element.remove();
+                    gameState.enemies.splice(i, 1);
+                } else {
+                    enemy.element.style.backgroundPosition = `-${enemy.spriteIndex * 48}px 0px`;
+                    enemy.lastFrameUpdate = currentTime;
+                }
+            }
+            continue;
+        }
+
+        if (enemy.pathIndex < pathPoints.length - 1) {
+            const currentPoint = pathPoints[enemy.pathIndex];
+            const nextPoint = pathPoints[enemy.pathIndex + 1];
+            
+            const dx = nextPoint.x - (enemy.x + 15);
+            const dy = nextPoint.y - (enemy.y + 15);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 2) {
+                enemy.pathIndex++;
+            } else {
+                const speed = 2;
+                enemy.x += (dx / distance) * speed;
+                enemy.y += (dy / distance) * speed;
+                enemy.element.style.left = enemy.x + 'px';
+                enemy.element.style.top = enemy.y + 'px';
+                
+                updateEnemyAnimation(enemy, dx, dy);
+            }
+        } else {
+            enemy.isDying = true;
+            enemy.spriteIndex = 0;
+            enemy.element.style.backgroundImage = `url(${ENEMY_SPRITES[enemy.direction].death})`;
+            gameState.lives--;
+            updateStats();
+            
+            if (gameState.lives <= 0) {
+                alert('¡Game Over!');
+                location.reload();
+            }
+        }
+    }
+}
+
+function handleEnemyDeath(enemy) {
+    if (!enemy.isDying) {
+        enemy.isDying = true;
+        enemy.spriteIndex = 0;
+        enemy.element.style.backgroundImage = `url(${ENEMY_SPRITES[enemy.direction].death})`;
+        gameState.gold += 25;
+        updateStats();
+    }
+}
+
+// ==================== SISTEMA DE TORRES ====================
+const TOWER_SPRITES = {
+    basic: {
+        spriteSheet: '/img/Torres/2 Idle/4.png',
+        frames: 6,
+        frameWidth: 48,
+        frameHeight: 48
+    },
+    rapid: {
+        spriteSheet: '/img/Torres/2 Idle/6.png',
+        frames: 6,
+        frameWidth: 48,
+        frameHeight: 48
+    },
+    sniper: {
+        spriteSheet: '/img/Torres/2 Idle/7.png',
+        frames: 6,
+        frameWidth: 48,
+        frameHeight: 48
+    }
+};
+
+const towerTypes = {
+    basic: {
+        cost: 100,
+        range: 100,
+        damage: 20,
+        fireRate: 1000,
+        animationSpeed: 100
+    },
+    rapid: {
+        cost: 150,
+        range: 80,
+        damage: 10,
+        fireRate: 500,
+        animationSpeed: 80
+    },
+    sniper: {
+        cost: 200,
+        range: 150,
+        damage: 50,
+        fireRate: 2000,
+        animationSpeed: 120
+    }
+};
+
+function createTower(x, y, type) {
+    const tower = {
+        x: x,
+        y: y,
+        type: type,
+        lastShot: 0,
+        element: document.createElement('div'),
+        currentFrame: 0,
+        lastFrameUpdate: Date.now(),
+        spriteInfo: TOWER_SPRITES[type]
+    };
+
+    tower.element.className = 'tower';
+    tower.element.style.position = 'absolute';
+    tower.element.style.left = x + 'px';
+    tower.element.style.top = y + 'px';
+    tower.element.style.width = '48px';
+    tower.element.style.height = '48px';
+    tower.element.style.backgroundImage = `url(${tower.spriteInfo.spriteSheet})`;
+    tower.element.style.backgroundPosition = '0px 0px';
+    tower.element.style.backgroundRepeat = 'no-repeat';
+    tower.element.style.imageRendering = 'pixelated';
+    tower.element.style.backgroundSize = `${tower.spriteInfo.frameWidth * tower.spriteInfo.frames}px ${tower.spriteInfo.frameHeight}px`;
+    tower.element.style.zIndex = '2';
+
+    document.getElementById('gameBoard').appendChild(tower.element);
+    gameState.towers.push(tower);
+}
+
+function updateTowerAnimations() {
+    const currentTime = Date.now();
+    gameState.towers.forEach(tower => {
+        const towerConfig = towerTypes[tower.type];
+        
+        if (currentTime - tower.lastFrameUpdate > towerConfig.animationSpeed) {
+            tower.currentFrame = (tower.currentFrame + 1) % tower.spriteInfo.frames;
+            const frameX = tower.currentFrame * tower.spriteInfo.frameWidth;
+            tower.element.style.backgroundPosition = `-${frameX}px 0px`;
+            tower.lastFrameUpdate = currentTime;
+        }
+    });
+}
+
+function updateTowers() {
+    const currentTime = Date.now();
+    gameState.towers.forEach(tower => {
+        const towerConfig = towerTypes[tower.type];
+        if(currentTime - tower.lastShot >= towerConfig.fireRate) {
+            let closestEnemy = null;
+            let closestDistance = Infinity;
+            
+            gameState.enemies.forEach(enemy => {
+                if (!enemy.isDying) {
+                    const dx = (enemy.x + 16) - (tower.x + 16);
+                    const dy = (enemy.y + 16) - (tower.y + 16);
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if(distance < towerConfig.range && distance < closestDistance) {
+                        closestEnemy = enemy;
+                        closestDistance = distance;
+                    }
+                }
+            });
+            
+            if(closestEnemy) {
+                createProjectile(tower, closestEnemy);
+                tower.lastShot = currentTime;
+            }
+        }
+    });
+}
+
+// ==================== SISTEMA DE PROYECTILES ====================
+function createProjectile(tower, enemy) {
+    const projectile = {
+        x: tower.x + 19,
+        y: tower.y + 19,
+        targetEnemy: enemy,
+        tower: tower,
+        element: document.createElement('div')
+    };
+
+    projectile.element.className = 'projectile';
+    projectile.element.style.left = projectile.x + 'px';
+    projectile.element.style.top = projectile.y + 'px';
+
+    document.getElementById('gameBoard').appendChild(projectile.element);
+    gameState.projectiles.push(projectile);
+}
+
+function updateProjectiles() {
+    for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+        const projectile = gameState.projectiles[i];
+        
+        if (projectile.targetEnemy.isDying) {
+            projectile.element.remove();
+            gameState.projectiles.splice(i, 1);
+            continue;
+        }
+        
+        const dx = (projectile.targetEnemy.x + 15) - projectile.x;
+        const dy = (projectile.targetEnemy.y + 15) - projectile.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if(distance < 10) {
+            const damage = towerTypes[projectile.tower.type].damage;
+            projectile.targetEnemy.health -= damage;
+            
+            const healthPercent = (projectile.targetEnemy.health / projectile.targetEnemy.maxHealth) * 100;
+            projectile.targetEnemy.healthBar.style.width = `${Math.max(0, healthPercent)}%`;
+            
+            if(projectile.targetEnemy.health <= 0) {
+                handleEnemyDeath(projectile.targetEnemy);
+            }
+            
+            projectile.element.remove();
+            gameState.projectiles.splice(i, 1);
+        } else {
+            const speed = 5;
+            projectile.x += (dx / distance) * speed;
+            projectile.y += (dy / distance) * speed;
+            projectile.element.style.left = projectile.x + 'px';
+            projectile.element.style.top = projectile.y + 'px';
+        }
+    }
+}
+
+// ==================== SISTEMA DE OLEADAS ====================
+function startWave() {
+    if (!gameState.waveInProgress) {
+        gameState.waveInProgress = true;
+        let enemiesSpawned = 0;
+
+        // Calcular el número de enemigos para esta oleada
+        const baseEnemies = 10;
+        const enemiesMultiplier = 1 + (gameState.wave - 1) * 1;
+        const totalEnemies = Math.floor(baseEnemies * enemiesMultiplier);
+
+        // Reducir el tiempo de aparición en cada oleada
+        const spawnRate = Math.max(2000 - (gameState.wave - 1) * 600, 600);
+
+        const spawnInterval = setInterval(() => {
+            createEnemy();
+            enemiesSpawned++;
+
+            if (enemiesSpawned >= totalEnemies) {
+                clearInterval(spawnInterval);
+                gameState.waveInProgress = false;
+                gameState.wave++;
+                updateStats();
+
+                // Verificar si se completó el nivel
+                if (gameState.wave > 5) {
+                    setTimeout(() => {
+                        alert('¡Felicitaciones! ¡Has completado el nivel!');
+                        location.reload();
+                    }, 2000);
+                } else {
+                    // Preparar la siguiente oleada
+                    setTimeout(startWave, 5000);
+                }
+            }
+        }, spawnRate);
+    }
+}
+
+// Funciones auxiliares para el sistema de oleadas
+function calculateWaveDifficulty(wave) {
+    return {
+        enemyHealth: Math.floor(60 * (1 + (wave - 1) * 0.3)),
+        enemyCount: Math.floor(10 * (1 + (wave - 1))),
+        spawnRate: Math.max(2000 - (wave - 1) * 600, 600)
+    };
+}
+
+function isWaveComplete() {
+    return !gameState.waveInProgress && gameState.enemies.length === 0;
+}
+
+function getWaveReward(wave) {
+    return 100 + (wave - 1) * 50; // Recompensa base + bonus por oleada
+}
+
+function handleWaveCompletion() {
+    if (isWaveComplete()) {
+        gameState.gold += getWaveReward(gameState.wave);
+        updateStats();
+        
+        if (gameState.wave <= 5) {
+            // Mostrar mensaje de preparación para la siguiente oleada
+            const nextWavePreview = calculateWaveDifficulty(gameState.wave + 1);
+            console.log(`Preparando oleada ${gameState.wave + 1}:`, nextWavePreview);
+        }
+    }
+}
+
+// Sistema de checkpoints de oleada
+function checkWaveProgress() {
+    // Verificar el progreso de la oleada actual
+    if (gameState.waveInProgress) {
+        const remainingEnemies = gameState.enemies.length;
+        const waveProgress = 1 - (remainingEnemies / calculateWaveDifficulty(gameState.wave).enemyCount);
+        
+        // Actualizar la dificultad si es necesario
+        if (waveProgress > 0.5 && remainingEnemies > 0) {
+            // Aumentar ligeramente la velocidad de los enemigos restantes
+            gameState.enemies.forEach(enemy => {
+                enemy.speed = enemy.speed * 1.1;
+            });
+        }
+    }
+}
+
+// Integración con el game loop principal
+function updateWaveSystem() {
+    handleWaveCompletion();
+    checkWaveProgress();
+}
+// ==================== SISTEMA DE SLOTS PARA TORRES ====================
+function isValidTowerPosition(x, y) {
+    if (isOnPath(x, y)) return false;
+    
+    let isNearPath = false;
+    for (let dx = -2; dx <= 2; dx++) {
+        for (let dy = -2; dy <= 2; dy++) {
+            const checkX = x + (dx * 40);
+            const checkY = y + (dy * 40);
+            if (isOnPath(checkX, checkY)) {
+                isNearPath = true;
+                break;
+            }
+        }
+        if (isNearPath) break;
+    }
+    
+    return isNearPath;
+}
+
+function createTowerSlots() {
+    const gameBoard = document.getElementById('gameBoard');
+    for(let y = 0; y < 11; y++) {
+        for(let x = 0; x < 19; x++) {
+            if(isValidTowerPosition(x * 40, y * 40)) {
+                const slot = document.createElement('div');
+                slot.className = 'tower-slot';
+                slot.style.left = (x * 40) + 'px';
+                slot.style.top = (y * 40) + 'px';
+                slot.addEventListener('click', () => handleSlotClick(slot, x, y));
+                gameBoard.appendChild(slot);
+            }
+        }
+    }
+}
+
+function handleSlotClick(slot, x, y) {
+    if(gameState.selectedTowerType && !slot.hasChildNodes()) {
+        const towerConfig = towerTypes[gameState.selectedTowerType];
+        if(gameState.gold >= towerConfig.cost) {
+            createTower(x * 40, y * 40, gameState.selectedTowerType);
+            gameState.gold -= towerConfig.cost;
+            updateStats();
+        }
+    }
+}
+
+// ==================== SISTEMA DE UI Y ESTADÍSTICAS ====================
+function setupEventListeners() {
+    document.querySelectorAll('.tower-button').forEach(button => {
+        button.addEventListener('click', () => {
+            gameState.selectedTowerType = button.dataset.type;
+        });
+    });
+}
+
+function updateStats() {
+    document.getElementById('gold').textContent = gameState.gold;
+    document.getElementById('lives').textContent = gameState.lives;
+    document.getElementById('wave').textContent = gameState.wave;
+}
+
+function debugTower(tower) {
+    console.log('Estado de la torre:', {
+        tipo: tower.type,
+        sprite: tower.spriteInfo.spriteSheet,
+        frame: tower.currentFrame,
+        backgroundPosition: tower.element.style.backgroundPosition,
+        visible: tower.element.style.display !== 'none',
+        dimensions: {
+            width: tower.element.style.width,
+            height: tower.element.style.height
+        }
+    });
+}
+
+// ==================== INICIALIZACIÓN Y LOOP PRINCIPAL ====================
+function initGame() {
+    createPath();
+    createTowerSlots();
+    setupEventListeners();
+    updateStats();
+}
+
+function gameLoop() {
+    updateEnemies();
+    updateTowers();
+    updateTowerAnimations();
+    updateProjectiles();
+    requestAnimationFrame(gameLoop);
+}
+
+// Iniciar el juego
+initGame();
+gameLoop();
+
+// Iniciar la primera oleada automáticamente después de 3 segundos
+setTimeout(startWave, 3000);
+    </script>
+</body>
+</html>
