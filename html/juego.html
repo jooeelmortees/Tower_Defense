@@ -354,10 +354,22 @@ function handleEnemyDeath(enemy) {
 }
 
 // ==================== SISTEMA DE TORRES ====================
-const TOWER_IMAGES = {
-    basic: '/img/Torres/2 Idle/4.png',
-    rapid: '/img/Torres/2 Idle/6.png',
-    sniper: '/img/Torres/2 Idle/7.png'
+const TOWER_SPRITES = {
+    basic: {
+        idle: '/img/Torres/2 Idle/4.png',
+        frameWidth: 70,
+        frameCount: 3
+    },
+    rapid: {
+        idle: '/img/Torres/2 Idle/6.png',
+        frameWidth: 80,
+        frameCount: 6
+    },
+    sniper: {
+        idle: '/img/Torres/2 Idle/7.png',
+        frameWidth: 70,
+        frameCount: 6
+    }
 };
 
 const towerTypes = {
@@ -387,24 +399,53 @@ function createTower(x, y, type) {
         y: y,
         type: type,
         lastShot: 0,
+        currentFrame: 0,
+        lastFrameUpdate: Date.now(),
         element: document.createElement('div')
     };
 
-    // Configurar el elemento visual de la torre con más debug
+    // Configurar el elemento visual de la torre
     tower.element.className = 'tower';
     tower.element.style.position = 'absolute';
     tower.element.style.left = x + 'px';
     tower.element.style.top = y + 'px';
-    tower.element.style.width = '40px';
-    tower.element.style.height = '40px';
-    tower.element.style.backgroundImage = `url("${TOWER_IMAGES[type]}")`;
+    tower.element.style.backgroundImage = `url("${TOWER_SPRITES[type].idle}")`;
+    tower.element.style.backgroundPosition = '0px 0px';
+    tower.element.style.backgroundRepeat = 'no-repeat';
+    tower.element.style.backgroundSize = `${70 * 3}px 40px`;
 
     document.getElementById('gameBoard').appendChild(tower.element);
     gameState.towers.push(tower);
+    return tower;
+}
+
+// Añadir los estilos CSS necesarios
+const style = document.createElement('style');
+style.textContent = `
+    .tower {
+        image-rendering: pixelated;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+    }
+`;
+
+document.head.appendChild(style);
+
+function updateTowerAnimations() {
+    const currentTime = Date.now();
+    gameState.towers.forEach(tower => {
+        if (currentTime - tower.lastFrameUpdate > 10) {
+            tower.spriteIndex = (tower.spriteIndex + 1) % TOWER_SPRITES[tower.type].frameCount;
+            tower.element.style.backgroundPosition = `-${tower.spriteIndex * 70}px 0px`;
+            tower.lastFrameUpdate = currentTime;
+        }
+    });
 }
 
 function updateTowers() {
     const currentTime = Date.now();
+    updateTowerAnimations(); // Añadir la actualización de animaciones
+    
     gameState.towers.forEach(tower => {
         const towerConfig = towerTypes[tower.type];
         if(currentTime - tower.lastShot >= towerConfig.fireRate) {
