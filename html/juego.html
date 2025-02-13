@@ -5,42 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tower Defense - Nivel 1</title>
     <style>
-         /* Reset CSS básico */
-         * {
+          * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        /* Estilo del fondo del juego */
         body {
             background-color: #2c3e50;
             font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
         }
 
-        /* Contenedor principal del juego */
         #gameContainer {
-            width: 1000px;
-            margin: 150px auto;
+            width: 1200px;
             background-color: #34495e;
-            padding: 45px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
 
-        /* Tablero de juego */
         #gameBoard {
-            width: 760px;
-            height: 440px;
-            margin-left: 80px;
+            width: 1000px;
+            height: 544px;
             border-radius: 10px;
             position: relative;
-            margin-bottom: 20px;
             background-image: url('/img/Mapa/1 Tiles/FieldsTile_38.png');
             background-size: 40px 40px;
         }
 
-        /* Segmentos del camino */
+        /* Stats Panel en la esquina superior derecha */
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(44, 62, 80, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            gap: 20px;
+            font-size: 18px;
+            z-index: 10;
+        }
+
+        /* Panel de Torres en la esquina inferior izquierda */
+        #towers {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(44, 62, 80, 0.9);
+    padding: 15px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: row; /* Cambiado a row para alinear horizontalmente */
+    gap: 10px;
+    z-index: 10;
+}
+
+.tower-button {
+    padding: 12px 20px;
+    background-color: #3498db;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+    white-space: nowrap; /* Evita que el texto se rompa en múltiples líneas */
+}
+
+        .tower-button:hover {
+            background-color: #2980b9;
+        }
+
         .path-segment {
             position: absolute;
             background-image: url('/img/Mapa/1 Tiles/FieldsTile_01.png');
@@ -49,7 +91,6 @@
             background-size: cover;
         }
 
-        /* Slots para colocar torres */
         .tower-slot {
             width: 38px;
             height: 38px;
@@ -65,11 +106,6 @@
             opacity: 1;
         }
 
-        .tower-slot.invalid {
-            display: none;
-        }
-
-        /* Estilo de las torres */
         .tower {
             width: 40px;
             height: 40px;
@@ -80,7 +116,6 @@
             z-index: 3;
         }
 
-        /* Estilo de los enemigos */
         .enemy {
             width: 32px;
             height: 32px;
@@ -89,7 +124,6 @@
             transition: left 0.1s linear, top 0.1s linear;
         }
 
-        /* Barra de vida de los enemigos */
         .health-bar-container {
             position: absolute;
             top: -15px;
@@ -106,7 +140,6 @@
             transition: width 0.2s ease-in-out;
         }
 
-        /* Estilo de los proyectiles */
         .projectile {
             width: 10px;
             height: 10px;
@@ -116,53 +149,23 @@
             transition: all 0.1s linear;
         }
 
-        /* Panel de controles */
-        #controls {
-            width: 900px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-            background-color: #2c3e50;
-            border-radius: 5px;
-            color: white;
-        }
-
-        /* Botones de torres */
-        .tower-button {
-            padding: 10px;
-            background-color: #3498db;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            cursor: pointer;
-            margin: 0 5px;
-        }
-
-        .tower-button:hover {
-            background-color: #2980b9;
-        }
-
-        /* Panel de estadísticas */
-        #stats {
-            display: flex;
-            gap: 20px;
-        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <div id="gameBoard"></div>
-        <div id="controls">
-            <div id="towers">
-                <button class="tower-button" data-type="basic">Torre Básica ($100)</button>
-                <button class="tower-button" data-type="rapid">Torre Rápida ($125)</button>
-                <button class="tower-button" data-type="sniper">Torre Francotirador ($175)</button>
-            </div>
+        <div id="gameBoard">
+            <!-- Stats Panel -->
             <div id="stats">
                 <div>Oro: <span id="gold">300</span></div>
                 <div>Vidas: <span id="lives">20</span></div>
                 <div>Oleada: <span id="wave">1</span>/5</div>
+            </div>
+            
+            <!-- Torres Panel -->
+            <div id="towers">
+                <button class="tower-button" data-type="basic">Torre Básica ($100)</button>
+                <button class="tower-button" data-type="rapid">Torre Rápida ($125)</button>
+                <button class="tower-button" data-type="sniper">Torre Francotirador ($175)</button>
             </div>
         </div>
     </div>
@@ -182,12 +185,14 @@ const gameState = {
 
 // ==================== SISTEMA DE CAMINO ====================
 const pathSegments = [
-    {x: 0, y: 5}, {x: 1, y: 5}, {x: 2, y: 5}, {x: 3, y: 5}, {x: 4, y: 5},
-    {x: 5, y: 5}, {x: 5, y: 4}, {x: 5, y: 3}, {x: 5, y: 2}, {x: 6, y: 2},
-    {x: 7, y: 2}, {x: 8, y: 2}, {x: 9, y: 2}, {x: 10, y: 2}, {x: 10, y: 3},
-    {x: 10, y: 4}, {x: 10, y: 5}, {x: 10, y: 6}, {x: 10, y: 7}, {x: 11, y: 7},
-    {x: 12, y: 7}, {x: 13, y: 7}, {x: 14, y: 7}, {x: 15, y: 7}, {x: 16, y: 7},
-    {x: 17, y: 7}, {x: 18, y: 7}
+    {x: 0, y: 8}, {x: 1, y: 8}, {x: 2, y: 8}, {x: 3, y: 8}, {x: 4, y: 8},
+    {x: 5, y: 8}, {x: 5, y: 7}, {x: 5, y: 6}, {x: 5, y: 5}, {x: 6, y: 5},
+    {x: 7, y: 5}, {x: 8, y: 5}, {x: 9, y: 5}, {x: 10, y: 5}, {x: 10, y: 6},
+    {x: 10, y: 7}, {x: 10, y: 8}, {x: 10, y: 9}, {x: 10, y: 10}, {x: 11, y: 10},
+    {x: 12, y: 10}, {x: 13, y: 10}, {x: 13, y: 9}, {x: 13, y: 8}, {x: 13, y: 7},
+    {x: 13, y: 6}, {x: 13, y: 5}, {x: 13, y: 4}, {x: 14, y: 4}, {x: 15, y: 4},
+    {x: 16, y: 4}, {x: 17, y: 4}, {x: 18, y: 4}, {x: 19, y: 4}, {x: 20, y: 4},
+    {x: 21, y: 4}, {x: 22, y: 4}, {x: 23, y: 4}, {x: 24, y: 4}
 ];
 
 const pathPoints = pathSegments.map(segment => ({
