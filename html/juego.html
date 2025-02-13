@@ -156,8 +156,8 @@
         <div id="controls">
             <div id="towers">
                 <button class="tower-button" data-type="basic">Torre Básica ($100)</button>
-                <button class="tower-button" data-type="rapid">Torre Rápida ($150)</button>
-                <button class="tower-button" data-type="sniper">Torre Francotirador ($200)</button>
+                <button class="tower-button" data-type="rapid">Torre Rápida ($125)</button>
+                <button class="tower-button" data-type="sniper">Torre Francotirador ($175)</button>
             </div>
             <div id="stats">
                 <div>Oro: <span id="gold">300</span></div>
@@ -357,18 +357,27 @@ function handleEnemyDeath(enemy) {
 const TOWER_SPRITES = {
     basic: {
         idle: '/img/Torres/2 Idle/4.png',
-        frameWidth: 70,
-        frameCount: 3
+        frames: 6,
+        height: 60,
+        width: 40,  // Añadimos ancho específico
+        yOffset: -26,
+        frameWidth: 40  // Ancho de cada frame en el sprite
     },
     rapid: {
         idle: '/img/Torres/2 Idle/6.png',
-        frameWidth: 80,
-        frameCount: 6
+        frames: 6,
+        height: 60,
+        width: 40,
+        yOffset: -26,
+        frameWidth: 40
     },
     sniper: {
         idle: '/img/Torres/2 Idle/7.png',
-        frameWidth: 70,
-        frameCount: 6
+        frames: 6,
+        height: 56,
+        width: 40,
+        yOffset: -22,
+        frameWidth: 40
     }
 };
 
@@ -380,13 +389,13 @@ const towerTypes = {
         fireRate: 1000
     },
     rapid: {
-        cost: 150,
+        cost: 125,
         range: 80,
         damage: 10,
         fireRate: 500
     },
     sniper: {
-        cost: 200,
+        cost: 175,
         range: 150,
         damage: 50,
         fireRate: 2000
@@ -399,52 +408,63 @@ function createTower(x, y, type) {
         y: y,
         type: type,
         lastShot: 0,
-        currentFrame: 0,
+        spriteIndex: 0,
         lastFrameUpdate: Date.now(),
         element: document.createElement('div')
     };
+
+    const towerSprite = TOWER_SPRITES[type];
 
     // Configurar el elemento visual de la torre
     tower.element.className = 'tower';
     tower.element.style.position = 'absolute';
     tower.element.style.left = x + 'px';
-    tower.element.style.top = y + 'px';
-    tower.element.style.backgroundImage = `url("${TOWER_SPRITES[type].idle}")`;
+    tower.element.style.top = (y + towerSprite.yOffset) + 'px';
+    tower.element.style.width = towerSprite.width + 'px';
+    tower.element.style.height = towerSprite.height + 'px';
+    tower.element.style.backgroundImage = `url("${towerSprite.idle}")`;
     tower.element.style.backgroundPosition = '0px 0px';
     tower.element.style.backgroundRepeat = 'no-repeat';
-    tower.element.style.backgroundSize = `${70 * 3}px 40px`;
+    // Ajustamos el tamaño del sprite sheet para mantener las proporciones correctas
+    tower.element.style.backgroundSize = `${towerSprite.frameWidth * towerSprite.frames}px ${towerSprite.height}px`;
+    tower.element.style.imageRendering = 'pixelated';
 
     document.getElementById('gameBoard').appendChild(tower.element);
     gameState.towers.push(tower);
     return tower;
 }
 
-// Añadir los estilos CSS necesarios
+
+
+function updateTowerAnimations() {
+    const currentTime = Date.now();
+    gameState.towers.forEach(tower => {
+        if (currentTime - tower.lastFrameUpdate > 200) {
+            tower.spriteIndex = (tower.spriteIndex + 1) % TOWER_SPRITES[tower.type].frames;
+            // Usamos el frameWidth específico de cada tipo de torre
+            const xOffset = tower.spriteIndex * TOWER_SPRITES[tower.type].frameWidth;
+            tower.element.style.backgroundPosition = `-${xOffset}px 0px`;
+            tower.lastFrameUpdate = currentTime;
+        }
+    });
+}
+
+
 const style = document.createElement('style');
 style.textContent = `
     .tower {
         image-rendering: pixelated;
         image-rendering: -moz-crisp-edges;
         image-rendering: crisp-edges;
+        transform-origin: bottom center;
+        backface-visibility: hidden;  /* Mejora el rendimiento de la renderización */
     }
 `;
-
 document.head.appendChild(style);
-
-function updateTowerAnimations() {
-    const currentTime = Date.now();
-    gameState.towers.forEach(tower => {
-        if (currentTime - tower.lastFrameUpdate > 10) {
-            tower.spriteIndex = (tower.spriteIndex + 1) % TOWER_SPRITES[tower.type].frameCount;
-            tower.element.style.backgroundPosition = `-${tower.spriteIndex * 70}px 0px`;
-            tower.lastFrameUpdate = currentTime;
-        }
-    });
-}
 
 function updateTowers() {
     const currentTime = Date.now();
-    updateTowerAnimations(); // Añadir la actualización de animaciones
+    updateTowerAnimations();
     
     gameState.towers.forEach(tower => {
         const towerConfig = towerTypes[tower.type];
@@ -472,7 +492,6 @@ function updateTowers() {
         }
     });
 }
-
 // ==================== SISTEMA DE PROYECTILES ====================
 function createProjectile(tower, enemy) {
     const projectile = {
